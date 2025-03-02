@@ -24,11 +24,19 @@ A powerful AI-driven system for automated security log analysis, threat intellig
 - Batch log analysis capabilities
 - Statistical reporting endpoints for threat intelligence and incidents
 
+### User-Friendly Web Interface
+- Dashboard with key security metrics and visualizations
+- Interactive log analyzer with threat intelligence integration
+- Incident management system with resolution workflows
+- Threat intelligence database explorer
+- For more details, see the [Web Interface Documentation](web/README.md)
+
 ## 🛠️ Tech Stack
 - **LLMs & RAG**: Google Generative AI, Hugging Face, TensorFlow
 - **Database**: PostgreSQL + pgvector for embeddings
 - **Security Tools**: Fortinet, Azure Security Center, Linux logs
 - **Backend**: Python (Flask / FastAPI)
+- **Frontend**: Bootstrap, JavaScript, Flask templates
 - **Retrieval Pipeline**: LangChain
 - **Threat Intelligence**: CVE Database, MITRE ATT&CK
 - **Vector Search**: pgvector for PostgreSQL
@@ -37,11 +45,16 @@ A powerful AI-driven system for automated security log analysis, threat intellig
 ```
 cyber_ai/
 ├── backend/                 # Backend code
-│   ├── app.py               # Main Flask/FastAPI application
+│   ├── app.py               # Main FastAPI application
 │   ├── config.py            # Configuration settings
 │   ├── models.py            # Database models
 │   ├── threat_analysis.py   # Threat analysis logic
 │   └── utils.py             # Utility functions
+├── web/                     # Web interface code
+│   ├── app.py               # Flask web application
+│   ├── templates/           # HTML templates
+│   ├── static/              # Static assets (CSS, JS, images)
+│   └── README.md            # Web interface documentation
 ├── embeddings/              # Vector embeddings storage
 ├── models/                  # ML models storage
 ├── samples/                 # Sample log files
@@ -57,7 +70,7 @@ cyber_ai/
 ### Prerequisites
 - Python 3.8+
 - PostgreSQL with pgvector extension
-- Google ai gemini API key (optional, for Google ai Integration)
+- Google AI Gemini API key (optional, for Google AI Integration)
 
 ### Installation
 
@@ -102,13 +115,23 @@ cd backend
 python models.py
 ```
 
-### Running the Application
+### Running the Applications
 
-Start the Flask application:
+#### Start the Backend API:
 ```bash
 cd backend
 python app.py
 ```
+
+#### Start the Web Interface:
+```bash
+cd web
+python app.py
+```
+
+Access the web interface at http://localhost:5000 (or the configured port)
+
+For more detailed instructions on the web interface, see the [Web Interface Documentation](web/README.md).
 
 ## 📊 API Usage Examples
 
@@ -144,6 +167,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgements
 
-- [Google ai](https://ai.google.dev/gemini-api/docs/) for their powerful language models
+- [Google AI](https://ai.google.dev/gemini-api/docs/) for their powerful language models
 - [PostgreSQL](https://www.postgresql.org/) and [pgvector](https://github.com/pgvector/pgvector) for vector storage
 - [LangChain](https://github.com/hwchase17/langchain) for the retrieval pipelines
