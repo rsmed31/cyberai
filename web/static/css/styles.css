@@ -1,0 +1,162 @@
+/* Main styles for CyberAI web interface */
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.footer {
+    margin-top: auto;
+    background-color: #343a40 !important;
+    color: white;
+}
+
+.footer .text-muted {
+    color: #adb5bd !important;
+}
+
+/* Dashboard styles */
+.stat-card {
+    transition: transform 0.3s;
+    border-radius: 8px;
+    overflow: hidden;
+    border: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.stat-card .card-header {
+    font-weight: 600;
+    border-bottom: none;
+}
+
+.stat-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+/* Incident list styling */
+.incident-list .table th {
+    border-top: none;
+    font-weight: 600;
+}
+
+.incident-list .table tr {
+    transition: background-color 0.2s;
+}
+
+.incident-list .table tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.severity-badge {
+    width: 80px;
+    text-align: center;
+}
+
+/* Log analyzer styles */
+.log-form {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.log-textarea {
+    font-family: monospace;
+    min-height: 150px;
+    resize: vertical;
+}
+
+.analysis-results {
+    margin-top: 1.5rem;
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.parsed-log {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 5px;
+    font-family: monospace;
+    overflow-x: auto;
+}
+
+.threat-card {
+    margin-bottom: 1rem;
+    border-left: 4px solid #007bff;
+}
+
+.recommendation-card {
+    margin-bottom: 1rem;
+    border-left: 4px solid #28a745;
+}
+
+/* Priority indicators */
+.priority-1 {
+    border-left-color: #dc3545 !important;
+}
+
+.priority-2 {
+    border-left-color: #fd7e14 !important;
+}
+
+.priority-3 {
+    border-left-color: #ffc107 !important;
+}
+
+.priority-4 {
+    border-left-color: #17a2b8 !important;
+}
+
+.priority-5 {
+    border-left-color: #28a745 !important;
+}
+
+/* Dark mode toggle */
+.dark-mode-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #343a40;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.3s;
+}
+
+.dark-mode-toggle:hover {
+    background-color: #23272b;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    .stat-card {
+        margin-bottom: 20px;
+    }
+} 

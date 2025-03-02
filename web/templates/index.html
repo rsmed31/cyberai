@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - CyberAI{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Security Dashboard</h1>
+        <div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="refresh-dashboard">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <span class="ms-2 text-muted small">Last updated: {{ last_update }}</span>
+        </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="row">
+        <!-- Total Incidents -->
+        <div class="col-md-3">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Total Incidents</h5>
+                    <h2 class="display-4">{{ stats.incidents.total|default(0) }}</h2>
+                    <div class="text-muted">{{ stats.incidents.unresolved|default(0) }} active</div>
+                </div>
+            </div>
+        </div>
+        <!-- Other statistics cards... -->
+    </div>
+
+    <div class="row">
+        <!-- Recent Incidents -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Recent Security Incidents</h5>
+                        <a href="{{ url_for('incidents') }}" class="btn btn-sm btn-primary">View All</a>
+                    </div>
+                </div>
+                <div class="card-body incident-list">
+                    {% if recent_incidents %}
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Timestamp</th>
+                                    <th>Source</th>
+                                    <th>Severity</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for incident in recent_incidents %}
+                                <tr>
+                                    <td><a href="{{ url_for('incident_detail', incident_id=incident.id) }}">#{{ incident.id }}</a></td>
+                                    <td>{{ incident.timestamp|datetime }}</td>
+                                    <td>{{ incident.source }}</td>
+                                    <td>
+                                        <span class="badge severity-badge bg-{{ incident.severity|severity_class }}">
+                                            {{ incident.severity }}
+                                        </span>
+                                    </td>
+                                    <td class="text-truncate" style="max-width: 250px;">{{ incident.description }}</td>
+                                    <td>
+                                        {% if incident.resolved %}
+                                        <span class="badge bg-success">Resolved</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">Active</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                        <p class="lead">No recent security incidents detected.</p>
+                        <p class="text-muted">Your environment is currently secure.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions and System Status -->
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <a href="{{ url_for('log_analyzer') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-search text-primary me-2"></i>
+                                Analyze Security Logs
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </a>
+                        <a href="{{ url_for('batch_analyzer') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-layer-group text-primary me-2"></i>
+                                Batch Log Analysis
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </a>
+                        <a href="{{ url_for('threat_intelligence') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-globe text-primary me-2"></i>
+                                Threat Intelligence
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center confirm-action" data-confirm-message="Are you sure you want to update the threat database? This may take a few minutes.">
+                            <div>
+                                <i class="fas fa-sync text-primary me-2"></i>
+                                Update Threat Database
+                            </div>
+                            <span class="badge bg-primary rounded-pill">New</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Status Component -->
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">System Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-muted">Overall Status:</span>
+                            <span class="badge bg-{{ 'success' if system_status.status == 'operational' else 'warning' if system_status.status == 'degraded' else 'danger' }}">
+                                {{ system_status.status|default('Unknown')|title }}
+                            </span>
+                        </div>
+                        
+                        <!-- Database Status -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <i class="fas fa-database me-2"></i>
+                                <span>Database</span>
+                            </div>
+                            <div>
+                                {% if system_status.database|default(false) %}
+                                    <span class="badge bg-{{ 'success' if system_status.database.status == 'connected' else 'danger' }}">
+                                        {{ system_status.database.status|title }}
+                                    </span>
+                                    <small class="text-muted ms-2">{{ system_status.database.type|default('') }}</small>
+                                {% else %}
+                                    <span class="badge bg-secondary">Unknown</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- API Server -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <i class="fas fa-server me-2"></i>
+                                <span>API Server</span>
+                            </div>
+                            <div>
+                                {% if system_status.server|default(false) %}
+                                    <span class="badge bg-{{ 'success' if system_status.server.status == 'running' else 'danger' }}">
+                                        {{ system_status.server.status|title }}
+                                    </span>
+                                    <small class="text-muted ms-2">{{ system_status.server.host|default('') }}:{{ system_status.server.port|default('') }}</small>
+                                {% else %}
+                                    <span class="badge bg-secondary">Unknown</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- AI Models -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <i class="fas fa-brain me-2"></i>
+                                <span>AI Models</span>
+                            </div>
+                            <div>
+                                {% if system_status.ai_models|default(false) %}
+                                    <span class="badge bg-{{ 'success' if system_status.ai_models.status == 'operational' else 'warning' if system_status.ai_models.status == 'partial' else 'danger' }}">
+                                        {{ system_status.ai_models.status|title }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Unknown</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- AI Model Details -->
+                        {% if system_status.ai_models|default(false) %}
+                            <div class="mt-2 ps-4 small">
+                                <div class="d-flex justify-content-between">
+                                    <span>Embeddings:</span>
+                                    <span class="badge bg-{{ 'success' if system_status.ai_models.embeddings == 'loaded' else 'danger' }}">
+                                        {{ system_status.ai_models.embeddings|title }}
+                                    </span>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1">
+                                    <span>Language Model:</span>
+                                    <span class="badge bg-{{ 'success' if system_status.ai_models.language_model == 'loaded' else 'danger' }}">
+                                        {{ system_status.ai_models.language_model|title }}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- Last Update Time -->
+                        <div class="mt-3 text-end">
+                            <small class="text-muted">
+                                Last checked: {{ system_status.last_check|datetime if system_status.last_check else 'Unknown' }}
+                            </small>
+                        </div>
+
+                        <!-- Manual Refresh Button -->
+                        <div class="mt-3">
+                            <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-primary w-100">
+                                <i class="fas fa-sync-alt me-1"></i> Refresh Status
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('refresh-dashboard').addEventListener('click', function() {
+        location.reload();
+    });
+</script>
+{% endblock %}

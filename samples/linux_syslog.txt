@@ -1,0 +1,20 @@
+Jun 15 14:02:37 server1 sshd[12345]: Failed password for invalid user admin from 203.0.113.15 port 55462 ssh2
+Jun 15 14:02:41 server1 sshd[12345]: Failed password for invalid user admin from 203.0.113.15 port 55463 ssh2
+Jun 15 14:02:45 server1 sshd[12345]: Failed password for invalid user admin from 203.0.113.15 port 55464 ssh2
+Jun 15 14:02:49 server1 sshd[12345]: Failed password for invalid user admin from 203.0.113.15 port 55465 ssh2
+Jun 15 14:02:53 server1 sshd[12345]: Failed password for invalid user admin from 203.0.113.15 port 55466 ssh2
+Jun 15 14:03:04 server1 sshd[12346]: Failed password for root from 198.51.100.50 port 43215 ssh2
+Jun 15 14:03:07 server1 sshd[12346]: Failed password for root from 198.51.100.50 port 43216 ssh2
+Jun 15 14:03:10 server1 sshd[12346]: Failed password for root from 198.51.100.50 port 43217 ssh2
+Jun 15 14:03:12 server1 sshd[12346]: Connection closed by 198.51.100.50 port 43217 [preauth]
+Jun 15 14:05:22 server1 sshd[12347]: Accepted publickey for user1 from 192.168.1.10 port 51122 ssh2: RSA SHA256:abc123def456ghi789
+Jun 15 14:10:45 server1 sshd[12348]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=203.0.113.20 user=root
+Jun 15 14:10:48 server1 sshd[12348]: Failed password for root from 203.0.113.20 port 58974 ssh2
+Jun 15 14:15:32 server1 sshd[12349]: Invalid user testuser from 192.0.2.30
+Jun 15 14:15:35 server1 sshd[12349]: Failed password for invalid user testuser from 192.0.2.30 port 60123 ssh2
+Jun 15 14:15:38 server1 sshd[12349]: Failed password for invalid user testuser from 192.0.2.30 port 60124 ssh2
+Jun 15 14:20:15 server1 sshd[12350]: Connection closed by 45.33.21.5 port 51891 [preauth]
+Jun 15 14:25:42 server1 sshd[12351]: Received disconnect from 203.0.113.30 port 58123:11: Bye Bye [preauth]
+Jun 15 14:30:05 server1 sshd[12352]: Accepted password for user2 from 192.168.1.20 port 52123 ssh2
+Jun 15 14:35:10 server1 sshd[12353]: error: maximum authentication attempts exceeded for invalid user admin from 203.0.113.50 port 60789 ssh2 [preauth]
+Jun 15 14:35:11 server1 sshd[12353]: Disconnecting invalid user admin 203.0.113.50 port 60789: Too many authentication failures [preauth] 

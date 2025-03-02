@@ -1,0 +1,15 @@
+2023-04-20T09:45:12.567Z INFO AzureFirewall clientIP=192.0.2.40 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T09:45:12.1234567Z httpMethod=GET requestUri="/login.php?user=admin&password=password123" ruleId=REQUEST-942-APPLICATION-ATTACK-SQLI ruleGroup="OWASP" message="SQL Injection Attack Detected" action=blocked transactionId=abc123
+
+2023-04-20T09:47:32.123Z INFO AzureFirewall clientIP=198.51.100.60 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T09:47:32.3456789Z httpMethod=POST requestUri="/wp-login.php" ruleId=REQUEST-941-APPLICATION-ATTACK-XSS ruleGroup="OWASP" message="XSS Attack Detected" action=blocked transactionId=def456
+
+2023-04-20T09:52:45.789Z INFO AzureFirewall clientIP=203.0.113.70 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T09:52:45.4567890Z httpMethod=GET requestUri="/phpmyadmin/index.php" ruleId=REQUEST-913-SCANNER-DETECTION ruleGroup="OWASP" message="Scanner Activity Detected" action=blocked transactionId=ghi789
+
+2023-04-20T10:01:15.432Z INFO AzureFirewall clientIP=192.168.1.25 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T10:01:15.5678901Z httpMethod=GET requestUri="/api/users" ruleId=REQUEST-920-PROTOCOL-ENFORCEMENT ruleGroup="OWASP" message="Invalid Request" action=allowed transactionId=jkl012
+
+2023-04-20T10:15:27.654Z INFO AzureFirewall clientIP=192.0.2.50 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T10:15:27.6789012Z httpMethod=POST requestUri="/api/upload" ruleId=REQUEST-944-APPLICATION-ATTACK-JAVA ruleGroup="OWASP" message="Java Injection Attempt" action=blocked transactionId=mno345
+
+2023-04-20T10:30:42.987Z INFO AzureFirewall clientIP=198.51.100.80 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T10:30:42.7890123Z httpMethod=GET requestUri="/.env" ruleId=REQUEST-930-APPLICATION-ATTACK-LFI ruleGroup="OWASP" message="Path Traversal Attack" action=blocked transactionId=pqr678
+
+2023-04-20T10:45:33.210Z INFO AzureFirewall clientIP=203.0.113.90 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T10:45:33.8901234Z httpMethod=POST requestUri="/api/login" ruleId=REQUEST-921-PROTOCOL-ATTACK ruleGroup="OWASP" message="HTTP Protocol Violation" action=blocked transactionId=stu901
+
+2023-04-20T11:05:18.543Z INFO AzureFirewall clientIP=192.168.1.30 resourceId=/SUBSCRIPTIONS/SUBID/RESOURCEGROUPS/RGNAME/PROVIDERS/MICROSOFT.NETWORK/APPLICATIONGATEWAYS/APPGW requestTimestamp=2023-04-20T11:05:18.9012345Z httpMethod=GET requestUri="/dashboard" ruleId=REQUEST-920-PROTOCOL-ENFORCEMENT ruleGroup="OWASP" message="Size Limit Exceeded" action=allowed transactionId=vwx234 

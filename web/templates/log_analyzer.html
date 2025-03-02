@@ -1,0 +1,313 @@
+{% extends 'base.html' %}
+
+{% block title %}Log Analyzer - CyberAI{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Security Log Analyzer</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Log Analyzer</li>
+            </ol>
+        </nav>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card log-form mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Analyze Security Logs</h5>
+                    <p class="text-muted mb-4">Paste your security logs below to analyze them for potential threats and vulnerabilities.</p>
+                    
+                    <form method="POST" action="{{ url_for('log_analyzer') }}">
+                        <textarea name="log_data" class="form-control">{{ log_data }}</textarea>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="log-source" class="form-label">Log Source</label>
+                                <select class="form-select" id="log-source" name="source" required>
+                                    <option value="" selected disabled>Select log source...</option>
+                                    <option value="fortinet">Fortinet Firewall</option>
+                                    <option value="linux-syslog">Linux Syslog</option>
+                                    <option value="azure-waf">Azure WAF</option>
+                                    <option value="windows-event">Windows Event Log</option>
+                                    <option value="cisco-asa">Cisco ASA</option>
+                                    <option value="aws-cloudtrail">AWS CloudTrail</option>
+                                    <option value="auto-detect">Auto-detect (Experimental)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="analysis-depth" class="form-label">Analysis Depth</label>
+                                <select class="form-select" id="analysis-depth" name="depth">
+                                    <option value="standard" selected>Standard</option>
+                                    <option value="deep">Deep Analysis</option>
+                                    <option value="threat-hunting">Threat Hunting</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="additional-context" class="form-label">Additional Context (Optional)</label>
+                                <input type="text" class="form-control" id="additional-context" name="context" placeholder="E.g., Production environment, DMZ network">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="log-content" class="form-label">Log Content</label>
+                            <textarea class="form-control log-textarea" id="log-content" name="content" rows="8" required></textarea>
+                            <div class="form-text text-muted">Paste up to 10,000 lines of log data. For larger logs, use batch analysis.</div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="enable-ioc-extraction" name="extract_iocs" value="1" checked>
+                                <label class="form-check-label" for="enable-ioc-extraction">
+                                    Extract Indicators of Compromise
+                                </label>
+                            </div>
+                            <div>
+                                <button type="reset" class="btn btn-outline-secondary me-2">Clear</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Analyze Logs
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            {% if analysis_results %}
+            <div class="analysis-results">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>Analysis Results</h4>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-2">
+                            <i class="fas fa-download me-1"></i> Export Results
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                            <i class="fas fa-print me-1"></i> Print
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <h5 class="mb-0">Parsed Log Data</h5>
+                            </div>
+                            <div class="card-body">
+                                <h6>Summary</h6>
+                                <ul class="list-unstyled">
+                                    <li><strong>Log Source:</strong> {{ analysis_results.log_source }}</li>
+                                    <li><strong>Total Entries:</strong> {{ analysis_results.total_entries }}</li>
+                                    <li><strong>Date Range:</strong> {{ analysis_results.date_range }}</li>
+                                    <li><strong>Processing Time:</strong> {{ analysis_results.processing_time }}ms</li>
+                                </ul>
+                                
+                                <h6 class="mt-3">Sample Parsed Entries</h6>
+                                <div class="parsed-log">
+                                    <pre>{{ analysis_results.sample_entries }}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <h5 class="mb-0">Security Assessment</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="me-3">
+                                        {% if analysis_results.risk_level == 'Critical' %}
+                                        <span class="badge bg-danger p-2" style="font-size: 1rem;">Critical Risk</span>
+                                        {% elif analysis_results.risk_level == 'High' %}
+                                        <span class="badge bg-danger p-2" style="font-size: 1rem;">High Risk</span>
+                                        {% elif analysis_results.risk_level == 'Medium' %}
+                                        <span class="badge bg-warning p-2" style="font-size: 1rem;">Medium Risk</span>
+                                        {% elif analysis_results.risk_level == 'Low' %}
+                                        <span class="badge bg-info p-2" style="font-size: 1rem;">Low Risk</span>
+                                        {% else %}
+                                        <span class="badge bg-success p-2" style="font-size: 1rem;">No Risk Detected</span>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <div class="progress" style="width: 200px; height: 10px">
+                                            <div class="progress-bar bg-danger" role="progressbar" style="width: {{ analysis_results.risk_percentage }}%" aria-valuenow="{{ analysis_results.risk_percentage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <p>{{ analysis_results.summary }}</p>
+                                
+                                {% if analysis_results.notable_events %}
+                                <h6 class="mt-3">Notable Events</h6>
+                                <ul>
+                                    {% for event in analysis_results.notable_events %}
+                                    <li>{{ event }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <h5 class="mb-0">Detected Threats</h5>
+                            </div>
+                            <div class="card-body">
+                                {% if analysis_results.threats %}
+                                {% for threat in analysis_results.threats %}
+                                <div class="card threat-card mb-3 priority-{{ threat.priority }}">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between">
+                                            <h6 class="card-title">{{ threat.name }}</h6>
+                                            <span class="badge bg-danger">{{ threat.confidence }}% Confidence</span>
+                                        </div>
+                                        <p class="card-text">{{ threat.description }}</p>
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <small class="text-muted">
+                                                <strong>Type:</strong> {{ threat.type }} | 
+                                                <strong>Priority:</strong> {{ threat.priority }} |
+                                                <strong>MITRE ATT&CK:</strong> {{ threat.mitre_id }}
+                                            </small>
+                                            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#threat-details-{{ loop.index }}">
+                                                More Details
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="collapse mt-3" id="threat-details-{{ loop.index }}">
+                                            <div class="card card-body bg-light">
+                                                <h6>Evidence:</h6>
+                                                <pre>{{ threat.evidence }}</pre>
+                                                
+                                                <h6 class="mt-2">Tactics, Techniques & Procedures:</h6>
+                                                <p>{{ threat.ttp }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-shield-alt text-success fa-3x mb-3"></i>
+                                    <p class="lead">No threats detected in the provided logs.</p>
+                                    <p class="text-muted">The analyzed logs don't contain any recognizable threat patterns.</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <h5 class="mb-0">Security Recommendations</h5>
+                            </div>
+                            <div class="card-body">
+                                {% if analysis_results.recommendations %}
+                                {% for recommendation in analysis_results.recommendations %}
+                                <div class="card recommendation-card mb-3 priority-{{ recommendation.priority }}">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between">
+                                            <h6 class="card-title">{{ recommendation.title }}</h6>
+                                            <span class="badge bg-{{ recommendation.priority|severity_class }}">Priority {{ recommendation.priority }}</span>
+                                        </div>
+                                        <p class="card-text">{{ recommendation.description }}</p>
+                                        
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <small class="text-muted">
+                                                <strong>Category:</strong> {{ recommendation.category }} |
+                                                <strong>Implementation:</strong> {{ recommendation.difficulty }}
+                                            </small>
+                                            {% if recommendation.id %}
+                                            <a href="{{ url_for('recommendation_implement', recommendation_id=recommendation.id) }}" class="btn btn-sm btn-success">
+                                                <i class="fas fa-check me-1"></i> Implement
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                                    <p class="lead">No recommendations needed.</p>
+                                    <p class="text-muted">No actionable security recommendations based on the analyzed logs.</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if analysis_results.iocs %}
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Indicators of Compromise (IOCs)</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Type</th>
+                                                <th>Value</th>
+                                                <th>Description</th>
+                                                <th>Reputation</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for ioc in analysis_results.iocs %}
+                                            <tr>
+                                                <td>{{ ioc.type }}</td>
+                                                <td><code>{{ ioc.value }}</code></td>
+                                                <td>{{ ioc.description }}</td>
+                                                <td>
+                                                    {% if ioc.reputation == 'Malicious' %}
+                                                    <span class="badge bg-danger">Malicious</span>
+                                                    {% elif ioc.reputation == 'Suspicious' %}
+                                                    <span class="badge bg-warning">Suspicious</span>
+                                                    {% elif ioc.reputation == 'Known Good' %}
+                                                    <span class="badge bg-success">Known Good</span>
+                                                    {% else %}
+                                                    <span class="badge bg-secondary">Unknown</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm" role="group">
+                                                        <button type="button" class="btn btn-outline-primary">Add to Watchlist</button>
+                                                        <button type="button" class="btn btn-outline-secondary">Search Threat Intel</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Log Analyzer specific scripts can be added here
+</script>
+{% endblock %}
