@@ -10,7 +10,7 @@ A powerful AI-driven system for automated security log analysis, threat intellig
 - Semantic similarity search for identifying related threats
 
 ### LLM-Powered Incident Analysis
-- Uses OpenAI or TensorFlow-based LLMs to analyze logs and suggest actions
+- Uses Google's Generative AI for advanced log analysis and action suggestions
 - Identifies attack patterns from logs and suggests firewall rule updates
 - Generates detailed incident reports with prioritized recommendations
 
@@ -25,7 +25,7 @@ A powerful AI-driven system for automated security log analysis, threat intellig
 - Statistical reporting endpoints for threat intelligence and incidents
 
 ## 🛠️ Tech Stack
-- **LLMs & RAG**: OpenAI GPT, Hugging Face, TensorFlow
+- **LLMs & RAG**: Google Generative AI, Hugging Face, TensorFlow
 - **Database**: PostgreSQL + pgvector for embeddings
 - **Security Tools**: Fortinet, Azure Security Center, Linux logs
 - **Backend**: Python (Flask / FastAPI)
@@ -57,7 +57,7 @@ cyber_ai/
 ### Prerequisites
 - Python 3.8+
 - PostgreSQL with pgvector extension
-- OpenAI API key (optional, for OpenAI integration)
+- Google ai gemini API key (optional, for Google ai Integration)
 
 ### Installation
 
@@ -86,7 +86,7 @@ DB_NAME=cybersecurity_db
 DB_USER=postgres
 DB_PASSWORD=your_password
 
-OPENAI_API_KEY=your_openai_api_key
+GOOGLE_AI_API_KEY=your_google_api_key
 ```
 
 5. Set up PostgreSQL with pgvector
@@ -144,6 +144,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgements
 
-- [OpenAI](https://openai.com/) for their powerful language models
+- [Google ai](https://ai.google.dev/gemini-api/docs/) for their powerful language models
 - [PostgreSQL](https://www.postgresql.org/) and [pgvector](https://github.com/pgvector/pgvector) for vector storage
-- [LangChain](https://github.com/hwchase17/langchain) for the retrieval pipelines 
+- [LangChain](https://github.com/hwchase17/langchain) for the retrieval pipelines
