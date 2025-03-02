@@ -91,7 +91,7 @@ def severity_class(severity):
 # Routes
 @app.route('/')
 def index():
-    """Home page with dashboard overview"""
+    """Dashboard page"""
     # Create default stats with proper structure for template
     stats = {
         "incidents": {
@@ -100,7 +100,8 @@ def index():
             "unresolved": 0,
             "severity_distribution": {
                 "Low": 0, "Medium-Low": 0, "Medium": 0, "Medium-High": 0, "High": 0
-            }
+            },
+            "recent_alerts": []
         },
         "threat_intelligence": {
             "total": 0,
@@ -111,6 +112,11 @@ def index():
                 "domain": 0,
                 "hash": 0,
                 "url": 0
+            },
+            "intelligence_summary": [],
+            "mitre_attack": {
+                "coverage": 0,
+                "percentage": 0
             }
         },
         "recommendations": {
@@ -187,16 +193,35 @@ def index():
                 system_status = system_status_response.json()
             else:
                 system_status = {"status": "unknown"}
-        except:
+                
+            # Get threat intelligence status
+            ti_status_response = requests.get(f"{API_BASE_URL}/threat-intelligence/status")
+            if ti_status_response.status_code == 200:
+                ti_status_data = ti_status_response.json()
+                # Merge threat intelligence status with system status
+                if "threat_db" not in system_status:
+                    system_status["threat_db"] = {}
+                system_status["threat_db"] = ti_status_data
+                
+                # Update system status based on threat intelligence
+                if system_status["status"] == "operational" and ti_status_data.get("status") != "up-to-date":
+                    system_status["status"] = "degraded"
+        except Exception as e:
+            print(f"Error fetching system status: {e}")
             system_status = {"status": "error"}
         
+        # Format current time for last update display
+        last_update = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
         # Fix: Change variable name from incidents to recent_incidents to match template
-        return render_template('index.html', stats=stats, recent_incidents=incidents, system_status=system_status)
+        return render_template('index.html', stats=stats, recent_incidents=incidents, 
+                              system_status=system_status, last_update=last_update)
         
     except Exception as e:
         flash(f"Error connecting to the API: {str(e)}", "danger")
         # Still return the well-structured default stats
-        return render_template('index.html', stats=stats, recent_incidents=[], system_status={"status": "error"})
+        return render_template('index.html', stats=stats, recent_incidents=[], 
+                              system_status={"status": "error"}, last_update=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     # The normal return path
     return render_template('index.html', stats=stats, recent_incidents=incidents, system_status=system_status)
@@ -577,6 +602,77 @@ def batch_detailed_report(job_id):
     """This would be implemented to show a detailed report for a batch job
     For now, redirect to batch details"""
     return redirect(url_for('batch_details', job_id=job_id))
+
+@app.route('/batch-analyzer-json', methods=['GET', 'POST'])
+def batch_analyzer_json():
+    """Page to submit JSON directly for batch analysis"""
+    if request.method == 'POST':
+        try:
+            # Get JSON data from form
+            json_content = request.form.get('json_content', '{}')
+            
+            try:
+                json_data = json.loads(json_content)
+            except json.JSONDecodeError as e:
+                flash(f"Invalid JSON format: {str(e)}", "danger")
+                return render_template('batch_analyzer.html', 
+                                      batch_results=None,
+                                      json_mode=True, 
+                                      raw_json=json_content)
+            
+            # Send to API
+            print(f"Sending JSON to API: {json_content}")
+            response = requests.post(
+                f"{API_BASE_URL}/analyze-batch", 
+                json=json_data,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            print(f"API response status: {response.status_code}")
+            print(f"API response headers: {response.headers}")
+            
+            if response.status_code == 200:
+                batch_results = response.json()
+                
+                # Ensure the results are properly formatted
+                if 'results' not in batch_results:
+                    batch_results = {'results': [batch_results]}
+                    
+                # Sanitize the results to avoid template errors
+                for result in batch_results.get('results', []):
+                    if 'parsed_log' not in result:
+                        result['parsed_log'] = {'raw_log': "Could not parse log"}
+                
+                return render_template('batch_analyzer.html', 
+                                      batch_results=batch_results, 
+                                      json_mode=True,
+                                      raw_json=json_content,
+                                      raw_response=json.dumps(batch_results, indent=2))
+            else:
+                flash(f'API Error: {response.status_code}', 'danger')
+                return render_template('batch_analyzer.html', 
+                                      batch_results=None,
+                                      json_mode=True,
+                                      raw_json=json_content,
+                                      raw_response=response.text)
+                
+        except Exception as e:
+            flash(f"Error: {str(e)}", "danger")
+            return render_template('batch_analyzer.html', 
+                                  batch_results=None,
+                                  json_mode=True, 
+                                  raw_json=request.form.get('json_content', '{}'))
+    
+    # For GET requests, show the JSON input form
+    sample_json = json.dumps({
+        "logs": ["date=2023-05-15 time=14:32:27 devname=\"FGT60D\" level=\"warning\" srcip=192.168.1.5 dstip=192.168.73.21 action=\"blocked\""],
+        "source_type": "fortinet"
+    }, indent=2)
+    
+    return render_template('batch_analyzer.html', 
+                          batch_results=None, 
+                          json_mode=True, 
+                          raw_json=sample_json)
 
 @app.route('/threat-intelligence')
 def threat_intelligence():

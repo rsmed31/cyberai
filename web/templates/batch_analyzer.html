@@ -40,6 +40,33 @@
                             <i class="fas fa-search me-1"></i> Analyze Logs
                         </button>
                     </form>
+                    
+                    <!-- Add this after your existing form -->
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Direct JSON Mode</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('batch_analyzer_json') }}">
+                                <div class="form-group mb-3">
+                                    <label for="json_content">JSON Payload:</label>
+                                    <textarea class="form-control font-monospace" id="json_content" name="json_content" rows="10">{{ raw_json|default('{
+  "logs": ["date=2023-05-15 time=14:32:27 devname=\\"FGT60D\\" level=\\"warning\\" srcip=192.168.1.5 dstip=192.168.73.21 action=\\"blocked\\""],
+  "source_type": "fortinet"
+}') }}</textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Analyze JSON</button>
+                            </form>
+                            
+                            {% if raw_response %}
+                            <div class="mt-4">
+                                <h6>API Response:</h6>
+                                <pre class="bg-light p-3 rounded"><code>{{ raw_response }}</code></pre>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
                     {% else %}
                     <!-- Display batch analysis results -->
                     <div class="mb-4">

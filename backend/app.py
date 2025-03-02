@@ -430,8 +430,8 @@ async def get_threat_intelligence(
                 "description": "A sophisticated campaign targeting multiple vulnerabilities in web applications to gain unauthorized access to sensitive information.",
                 "threat_level": "High",
                 "status": "Active",
-                "first_seen": datetime.datetime.now().replace(month=datetime.datetime.now().month-3).isoformat(),
-                "last_activity": datetime.datetime.now().isoformat(),
+                "first_seen": datetime.now().replace(month=datetime.now().month-3).isoformat(),
+                "last_activity": datetime.now().isoformat(),
                 "target_sectors": ["Finance", "Healthcare", "Government"],
                 "associated_actors": [actor["id"] for actor in threat_actors[:2]],
                 "related_iocs": [ioc["id"] for ioc in iocs[:5]] if iocs else []
@@ -443,8 +443,8 @@ async def get_threat_intelligence(
                 "description": "A targeted campaign using spear-phishing techniques to deliver malware that exploits known vulnerabilities.",
                 "threat_level": "Medium",
                 "status": "Monitoring", 
-                "first_seen": datetime.datetime.now().replace(month=datetime.datetime.now().month-6).isoformat(),
-                "last_activity": datetime.datetime.now().replace(day=datetime.datetime.now().day-14).isoformat(),
+                "first_seen": datetime.now().replace(month=datetime.now().month-6).isoformat(),
+                "last_activity": datetime.now().replace(day=datetime.now().day-14).isoformat(),
                 "target_sectors": ["Energy", "Manufacturing"],
                 "associated_actors": [actor["id"] for actor in threat_actors[2:4]] if len(threat_actors) > 3 else [],
                 "related_iocs": [ioc["id"] for ioc in iocs[5:10]] if len(iocs) > 5 else []
@@ -558,103 +558,82 @@ async def analyze_logs_batch(
 async def get_statistics(db: Session = Depends(get_db)):
     """Get system statistics for dashboard"""
     try:
-        # Get incident statistics
-        incidents_total = db.query(func.count(SecurityIncident.id)).scalar()
-        incidents_unresolved = db.query(func.count(SecurityIncident.id))\
-            .filter(SecurityIncident.is_resolved == False).scalar()
-        incidents_resolved = db.query(func.count(SecurityIncident.id))\
-            .filter(SecurityIncident.is_resolved == True).scalar()
+        # Incident statistics
+        total_incidents = db.query(SecurityIncident).count()
+        resolved_incidents = db.query(SecurityIncident).filter(SecurityIncident.is_resolved == True).count()
+        unresolved_incidents = total_incidents - resolved_incidents
         
-        # Get average severity of incidents
-        avg_severity = db.query(func.avg(SecurityIncident.severity)).scalar()
+        # Calculate severity distribution
+        severity_ranges = {
+            "Low": (0.0, 0.2),
+            "Medium-Low": (0.2, 0.4),
+            "Medium": (0.4, 0.6),
+            "Medium-High": (0.6, 0.8),
+            "High": (0.8, 1.0)
+        }
         
-        # Get count by severity level
-        high_severity = db.query(func.count(SecurityIncident.id))\
-            .filter(SecurityIncident.severity >= 7).scalar()
-        medium_severity = db.query(func.count(SecurityIncident.id))\
-            .filter(SecurityIncident.severity >= 4, SecurityIncident.severity < 7).scalar()
-        low_severity = db.query(func.count(SecurityIncident.id))\
-            .filter(SecurityIncident.severity < 4).scalar()
+        severity_distribution = {}
+        for label, (min_val, max_val) in severity_ranges.items():
+            count = db.query(SecurityIncident).filter(
+                SecurityIncident.severity >= min_val, 
+                SecurityIncident.severity < max_val
+            ).count()
+            severity_distribution[label] = count
         
-        # Get recent incidents (last 7 days)
-        seven_days_ago = datetime.now() - timedelta(days=7)
-        recent_incidents = db.query(func.count(SecurityIncident.id))\
-            .filter(SecurityIncident.timestamp >= seven_days_ago).scalar()
+        # Threat intelligence statistics
+        ti_total = db.query(ThreatIntelligence).count()
         
-        # Get threat intelligence statistics
-        total_threats = db.query(func.count(ThreatIntelligence.id)).scalar()
-        
-        # Get threat counts by source
-        threat_sources = db.query(
+        # Count by source
+        source_counts = db.query(
             ThreatIntelligence.source, 
             func.count(ThreatIntelligence.id)
         ).group_by(ThreatIntelligence.source).all()
         
-        # Get threat counts by severity
-        critical_threats = db.query(func.count(ThreatIntelligence.id))\
-            .filter(ThreatIntelligence.severity >= 9).scalar()
-        high_threats = db.query(func.count(ThreatIntelligence.id))\
-            .filter(ThreatIntelligence.severity >= 7, ThreatIntelligence.severity < 9).scalar()
-        medium_threats = db.query(func.count(ThreatIntelligence.id))\
-            .filter(ThreatIntelligence.severity >= 4, ThreatIntelligence.severity < 7).scalar()
-        low_threats = db.query(func.count(ThreatIntelligence.id))\
-            .filter(ThreatIntelligence.severity < 4).scalar()
+        source_distribution = {source: count for source, count in source_counts}
         
-        # Get recent threats (last 30 days)
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-        recent_threats = db.query(func.count(ThreatIntelligence.id))\
-            .filter(ThreatIntelligence.updated_date >= thirty_days_ago).scalar()
-            
-        # Get recommendations statistics
-        total_recommendations = db.query(func.count(RecommendedAction.id)).scalar()
-        implemented_recommendations = db.query(func.count(RecommendedAction.id))\
-            .filter(RecommendedAction.is_implemented == True).scalar()
+        # Get recent IOC counts
+        month_ago = datetime.now() - timedelta(days=30)
+        recent_ti = db.query(ThreatIntelligence).filter(
+            ThreatIntelligence.updated_date >= month_ago
+        ).count()
         
-        # Format the result
+        # Get IOC counts by type
+        ioc_counts = {
+            "ip": db.query(ThreatIntelligence).filter(ThreatIntelligence.source == "IOC-IP").count(),
+            "domain": db.query(ThreatIntelligence).filter(ThreatIntelligence.source == "IOC-DOMAIN").count(),
+            "hash": db.query(ThreatIntelligence).filter(ThreatIntelligence.source == "IOC-HASH").count(),
+            "url": db.query(ThreatIntelligence).filter(ThreatIntelligence.source == "IOC-URL").count()
+        }
+        
+        # Get summary of intelligence for display
+        recent_intel = db.query(ThreatIntelligence).order_by(
+            ThreatIntelligence.updated_date.desc()
+        ).limit(5).all()
+        
+        intel_summary = []
+        for intel in recent_intel:
+            intel_summary.append({
+                "name": intel.title,   # Use the correct attribute
+                "description": intel.description,
+                "severity": intel.severity,
+                "source": intel.source,
+                "updated_date": intel.updated_date.isoformat() if intel.updated_date else None
+            })
+        
+        # Return compiled statistics
         return {
             "incidents": {
-                "total": incidents_total,
-                "unresolved": incidents_unresolved,
-                "resolved": incidents_resolved,
-                "recent": recent_incidents,
-                "avg_severity": float(avg_severity) if avg_severity else 0,
-                "by_severity": {
-                    "high": high_severity,
-                    "medium": medium_severity,
-                    "low": low_severity
-                }
+                "total": total_incidents,
+                "resolved": resolved_incidents,
+                "unresolved": unresolved_incidents,
+                "severity_distribution": severity_distribution
             },
             "threat_intelligence": {
-                "total": total_threats,
-                "recent": recent_threats,
-                "by_severity": {
-                    "critical": critical_threats,
-                    "high": high_threats,
-                    "medium": medium_threats,
-                    "low": low_threats
-                },
-                "by_source": {
-                    source: count for source, count in threat_sources
-                },
-                "ioc_counts": {
-                    "ip": db.query(func.count(ThreatIntelligence.id))
-                        .filter(ThreatIntelligence.source == "IOC-IP").scalar() or 0,
-                    "domain": db.query(func.count(ThreatIntelligence.id))
-                        .filter(ThreatIntelligence.source == "IOC-DOMAIN").scalar() or 0,
-                    "hash": db.query(func.count(ThreatIntelligence.id))
-                        .filter(ThreatIntelligence.source == "IOC-HASH").scalar() or 0,
-                    "url": db.query(func.count(ThreatIntelligence.id))
-                        .filter(ThreatIntelligence.source == "IOC-URL").scalar() or 0
-                }
-            },
-            "recommendations": {
-                "total": total_recommendations,
-                "implemented": implemented_recommendations,
-                "pending": total_recommendations - implemented_recommendations,
-                "implementation_rate": (
-                    float(implemented_recommendations) / total_recommendations
-                    if total_recommendations > 0 else 0
-                )
+                "total": ti_total,
+                "recent": recent_ti,
+                "source_distribution": source_distribution,
+                "ioc_counts": ioc_counts,
+                "intelligence_summary": intel_summary
             }
         }
     except Exception as e:
@@ -667,7 +646,6 @@ async def get_system_status(db: Session = Depends(get_db)):
     try:
         # Check database connection
         try:
-            # Execute a simple query to check DB connection - use text() function
             result = db.execute(text("SELECT 1")).scalar()
             db_status = "connected" if result == 1 else "disconnected"
         except Exception as e:
@@ -675,26 +653,48 @@ async def get_system_status(db: Session = Depends(get_db)):
             db_status = "disconnected"
         
         # Check AI model status
+        ai_status = "unknown"
+        ai_details = {
+            "embeddings": "unknown",
+            "language_model": "unknown",
+            "model_info": {
+                "embeddings_type": "Unknown",
+                "llm_type": "Unknown"
+            }
+        }
+        
         try:
-            embeddings_loaded = hasattr(ai_service, 'embedding_model') and ai_service.embedding_model is not None
-            llm_loaded = hasattr(ai_service, 'llm') and ai_service.llm is not None
+            # Check embedding model
+            from utils import VectorEmbeddings
+            embeddings = VectorEmbeddings(use_google=True)  # Explicitly set to use Google
+            # Test the embeddings with a simple string
+            test_embedding = embeddings.get_embedding("test")
+            embeddings_loaded = test_embedding is not None and len(test_embedding) > 0
+            
+            # Check Google AI configuration
+            import google.generativeai as genai
+            from config import GOOGLE_API_KEY
+            llm_loaded = bool(GOOGLE_API_KEY and len(GOOGLE_API_KEY.strip()) > 0)
+            
+            # Update status based on checks
             ai_status = "operational" if embeddings_loaded and llm_loaded else "partial"
             ai_details = {
                 "embeddings": "loaded" if embeddings_loaded else "not loaded",
-                "language_model": "loaded" if llm_loaded else "not loaded"
+                "language_model": "loaded" if llm_loaded else "not loaded",
+                "model_info": {
+                    "embeddings_type": "Google AI Embeddings" if embeddings_loaded else "Unknown",
+                    "llm_type": "Google Generative AI" if llm_loaded else "Unknown",
+                    "embedding_dimensions": len(test_embedding) if embeddings_loaded else 0
+                }
             }
-        except Exception as e:
-            logger.error(f"AI model status error: {e}")
-            ai_status = "unknown"
-            ai_details = {"error": str(e)}
-        
-        # Get server information
-        server_info = {
-            "host": os.getenv("HOST", "0.0.0.0"),
-            "port": os.getenv("PORT", 8000),
-            "uptime": "N/A"  # You could track this with a start time variable
-        }
             
+            logger.info(f"AI Status Check - Embeddings: {ai_details['embeddings']}, LLM: {ai_details['language_model']}")
+            
+        except Exception as e:
+            logger.error(f"AI model status check error: {e}")
+            ai_status = "error"
+            ai_details["error"] = str(e)
+        
         return {
             "status": "operational" if db_status == "connected" and ai_status == "operational" else "degraded",
             "database": {
@@ -703,7 +703,8 @@ async def get_system_status(db: Session = Depends(get_db)):
             },
             "server": {
                 "status": "running",
-                **server_info
+                "host": os.getenv("HOST", "0.0.0.0"),
+                "port": os.getenv("PORT", 8000)
             },
             "ai_models": {
                 "status": ai_status,
@@ -711,6 +712,7 @@ async def get_system_status(db: Session = Depends(get_db)):
             },
             "last_check": datetime.now().isoformat()
         }
+        
     except Exception as e:
         logger.error(f"Error getting system status: {e}")
         raise HTTPException(status_code=500, detail=str(e))

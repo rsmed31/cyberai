@@ -76,64 +76,178 @@
     </div>
 
     <div class="row">
-        <!-- Recent Incidents -->
-        <div class="col-lg-8 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Recent Security Incidents</h5>
-                        <a href="{{ url_for('incidents') }}" class="btn btn-sm btn-primary">View All</a>
+        <!-- Recent Incidents and Threat Intelligence Summary -->
+        <div class="col-lg-8">
+            <div class="row">
+                <!-- Intelligence Summary -->
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Intelligence Summary</h5>
+                                <a href="{{ url_for('threat_intelligence') }}" class="btn btn-sm btn-primary">View All</a>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            {% if stats.threat_intelligence.intelligence_summary %}
+                                <div class="list-group">
+                                    {% for item in stats.threat_intelligence.intelligence_summary %}
+                                        <div class="list-group-item list-group-item-action flex-column align-items-start">
+                                            <div class="d-flex w-100 justify-content-between">
+                                                <h6 class="mb-1">{{ item.name }}</h6>
+                                                <span class="badge bg-{{ item.severity|float|severity_class }}">
+                                                    Severity: {{ item.severity|float|round(1) }}
+                                                </span>
+                                            </div>
+                                            <p class="mb-1 small">{{ item.description }}</p>
+                                            <div class="d-flex w-100 justify-content-between align-items-center mt-2">
+                                                <small class="text-muted">Source: {{ item.source }}</small>
+                                                <small class="text-muted">{{ item.updated_date|datetime if item.updated_date else 'Unknown date' }}</small>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-info-circle text-info fa-3x mb-3"></i>
+                                    <p class="lead">No recent threat intelligence.</p>
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
-                <div class="card-body incident-list">
-                    {% if recent_incidents %}
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Timestamp</th>
-                                    <th>Source</th>
-                                    <th>Severity</th>
-                                    <th>Description</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for incident in recent_incidents %}
-                                <tr>
-                                    <td><a href="{{ url_for('incident_detail', incident_id=incident.id) }}">#{{ incident.id }}</a></td>
-                                    <td>{{ incident.timestamp|datetime }}</td>
-                                    <td>{{ incident.source }}</td>
-                                    <td>
-                                        <span class="badge severity-badge bg-{{ incident.severity|severity_class }}">
-                                            {{ incident.severity }}
-                                        </span>
-                                    </td>
-                                    <td class="text-truncate" style="max-width: 250px;">{{ incident.description }}</td>
-                                    <td>
-                                        {% if incident.resolved %}
-                                        <span class="badge bg-success">Resolved</span>
-                                        {% else %}
-                                        <span class="badge bg-warning">Active</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                
+                <!-- MITRE ATT&CK Coverage -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">MITRE ATT&CK Coverage</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if stats.threat_intelligence.mitre_attack %}
+                                <div class="text-center">
+                                    <h2 class="display-4">{{ stats.threat_intelligence.mitre_attack.coverage }}</h2>
+                                    <p class="lead">ATT&CK Techniques Covered</p>
+                                    <div class="progress mt-2" style="height: 10px;">
+                                        <div class="progress-bar bg-primary" role="progressbar" 
+                                             style="width: {{ stats.threat_intelligence.mitre_attack.percentage }}%"
+                                             aria-valuenow="{{ stats.threat_intelligence.mitre_attack.percentage }}"
+                                             aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <div class="text-muted mt-2">
+                                        {{ stats.threat_intelligence.mitre_attack.percentage }}% of known techniques
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-shield-alt text-warning fa-3x mb-3"></i>
+                                    <p class="lead">No MITRE ATT&CK data available.</p>
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
-                    {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
-                        <p class="lead">No recent security incidents detected.</p>
-                        <p class="text-muted">Your environment is currently secure.</p>
+                </div>
+                
+                <!-- Recent Alerts -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Recent Alerts</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if stats.incidents.recent_alerts %}
+                                <div class="list-group">
+                                    {% for alert in stats.incidents.recent_alerts %}
+                                        <a href="{{ url_for('incident_detail', incident_id=alert.id) }}" class="list-group-item list-group-item-action">
+                                            <div class="d-flex w-100 justify-content-between">
+                                                <h6 class="mb-1">{{ alert.source }}</h6>
+                                                <small>{{ alert.timestamp|time_ago }}</small>
+                                            </div>
+                                            <p class="mb-1 small text-truncate">{{ alert.description }}</p>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="badge severity-badge bg-{{ alert.severity|severity_class }}">
+                                                    Severity: {{ alert.severity|float|round(1) }}
+                                                </span>
+                                                {% if alert.resolved %}
+                                                    <span class="badge bg-success">Resolved</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning">Active</span>
+                                                {% endif %}
+                                            </div>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                                    <p class="lead">No recent alerts.</p>
+                                    <p class="text-muted">Your environment is currently secure.</p>
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
-                    {% endif %}
+                </div>
+                
+                <!-- Recent Security Incidents -->
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Recent Security Incidents</h5>
+                                <a href="{{ url_for('incidents') }}" class="btn btn-sm btn-primary">View All</a>
+                            </div>
+                        </div>
+                        <div class="card-body incident-list">
+                            {% if recent_incidents %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Timestamp</th>
+                                            <th>Source</th>
+                                            <th>Severity</th>
+                                            <th>Description</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for incident in recent_incidents %}
+                                        <tr>
+                                            <td><a href="{{ url_for('incident_detail', incident_id=incident.id) }}">#{{ incident.id }}</a></td>
+                                            <td>{{ incident.timestamp|datetime }}</td>
+                                            <td>{{ incident.source }}</td>
+                                            <td>
+                                                <span class="badge severity-badge bg-{{ incident.severity|severity_class }}">
+                                                    {{ incident.severity }}
+                                                </span>
+                                            </td>
+                                            <td class="text-truncate" style="max-width: 250px;">{{ incident.description }}</td>
+                                            <td>
+                                                {% if incident.resolved %}
+                                                <span class="badge bg-success">Resolved</span>
+                                                {% else %}
+                                                <span class="badge bg-warning">Active</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                                <p class="lead">No recent security incidents detected.</p>
+                                <p class="text-muted">Your environment is currently secure.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        
+
         <!-- Quick Actions and System Status -->
         <div class="col-lg-4">
             <!-- Quick Actions -->
