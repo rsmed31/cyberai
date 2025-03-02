@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import tensorflow as tf
 import time
+import datetime
+import ipaddress
 
 from config import GOOGLE_API_KEY, ALERT_THRESHOLD
 from models import ThreatIntelligence, SecurityIncident, IncidentThreatRelation, RecommendedAction
@@ -115,61 +117,71 @@ class ThreatAnalyzer:
         )
     
     def analyze_log(self, log_line: str, source_type: Optional[str] = None) -> Dict:
-        """Analyze a single log line for security incidents
+        """Analyze a single log line and return findings
         
         Args:
             log_line: Raw log line to analyze
-            source_type: Optional log source type
+            source_type: Optional source type to assist the parser
             
         Returns:
-            Analysis results including threat matches and recommendations
+            Dictionary with analysis results including parsed log, severity, 
+            related threats, and recommendations
         """
         # Parse the log
         parsed_log = self.log_parser.parse_log(log_line, source_type)
         if not parsed_log:
-            return {"error": "Unable to parse log line"}
+            return {
+                "success": False,
+                "error": "Failed to parse log",
+                "raw_log": log_line
+            }
         
-        # Extract severity
+        # Add the raw log to the parsed result
+        parsed_log["raw_log"] = log_line
+        
+        # Extract potential indicators of compromise from the log
+        iocs = self._extract_iocs(parsed_log)
+        
+        # Create an incident record in the database for significant findings
+        incident = None
         severity = self.log_parser.extract_severity(parsed_log)
+        if severity >= ALERT_THRESHOLD:
+            # Create security incident
+            incident = SecurityIncident(
+                source_ip=parsed_log.get("source_ip", "unknown"),
+                destination_ip=parsed_log.get("destination_ip", "unknown"),
+                log_source=parsed_log.get("source_type", source_type or "unknown"),
+                severity=severity,
+                description=self._generate_incident_description(parsed_log),
+                raw_log=log_line
+            )
+            self.db.add(incident)
+            self.db.commit()
+            self.db.refresh(incident)
         
-        # Create a security incident
-        incident = SecurityIncident(
-            source_ip=parsed_log.get('source_ip'),
-            destination_ip=parsed_log.get('destination_ip'),
-            log_source=parsed_log.get('source_type'),
-            severity=severity,
-            description=f"Potential security incident from {parsed_log.get('source_ip', 'unknown')}",
-            raw_log=log_line
-        )
-        self.db.add(incident)
-        self.db.flush()  # Get ID without committing
+        # Find related threats using the parsed data
+        related_threats = []
+        if incident:
+            related_threats = self._find_related_threats(parsed_log, incident.id)
+        else:
+            # Even if we didn't create an incident, still look for threats
+            related_threats = self._find_related_threats(parsed_log, None)
         
-        # Find related threats using vector similarity
-        related_threats = self._find_related_threats(parsed_log, incident.id)
-        
-        # Generate recommendations using LLM
+        # Generate recommendations
         recommendations = self._generate_recommendations(parsed_log, related_threats)
         
-        # Save recommendations to database
-        for i, rec in enumerate(recommendations):
-            recommendation = RecommendedAction(
-                incident_id=incident.id,
-                action_type=rec.get('type', 'unknown'),
-                description=rec.get('description', ''),
-                priority=rec.get('priority', 3)
-            )
-            self.db.add(recommendation)
+        # Find related IOCs in threat intelligence
+        related_iocs = self._find_related_iocs(iocs)
         
-        # Commit all changes
-        self.db.commit()
-        
-        # Return analysis results
         return {
-            "incident_id": incident.id,
-            "severity": severity,
+            "success": True,
             "parsed_log": parsed_log,
+            "severity": severity,
             "related_threats": related_threats,
-            "recommendations": recommendations
+            "recommendations": recommendations,
+            "incident_id": incident.id if incident else None,
+            "iocs": iocs,
+            "related_intelligence": related_iocs
         }
     
     def analyze_logs(self, logs: List[str], source_type: Optional[str] = None) -> List[Dict]:
@@ -341,8 +353,79 @@ class ThreatAnalyzer:
         # Fetch MITRE ATT&CK data
         mitre_data = self.threat_fetcher.fetch_mitre_attack()
         
+        # Create synthetic data for demonstration
+        synthetic_data = []
+        
+        # Add synthetic IOC data (IP addresses)
+        synthetic_data.extend([
+            {
+                'source': 'IOC-IP',
+                'reference_id': f'IP-{i}',
+                'title': f'Malicious IP Address {ip}',
+                'description': f'This IP address has been observed in multiple attack campaigns including phishing, malware distribution, and command and control operations.',
+                'severity': 8.5,
+                'published_date': datetime.datetime.now() - datetime.timedelta(days=30),
+                'updated_date': datetime.datetime.now()
+            } for i, ip in enumerate([
+                '103.154.92.12', '185.220.101.33', '206.188.197.77', '91.109.190.8',
+                '45.141.152.77', '195.123.246.138', '77.73.133.88', '185.180.197.112'
+            ])
+        ])
+        
+        # Add synthetic IOC data (domains)
+        synthetic_data.extend([
+            {
+                'source': 'IOC-DOMAIN',
+                'reference_id': f'DOMAIN-{i}',
+                'title': f'Malicious Domain {domain}',
+                'description': f'This domain has been associated with phishing campaigns and malware distribution. It was registered recently and shows patterns consistent with algorithmically generated domains.',
+                'severity': 7.8,
+                'published_date': datetime.datetime.now() - datetime.timedelta(days=15),
+                'updated_date': datetime.datetime.now()
+            } for i, domain in enumerate([
+                'secure-banklogin.com', 'microsoft-authverify.net', 'document-preview.org',
+                'account-security-check.com', 'googlemail-verify.com', 'amazonorder-tracking.net'
+            ])
+        ])
+        
+        # Add synthetic IOC data (file hashes)
+        synthetic_data.extend([
+            {
+                'source': 'IOC-HASH',
+                'reference_id': f'HASH-{i}',
+                'title': f'Malicious File Hash {file_hash[:12]}...',
+                'description': f'This file hash is associated with {malware_name} malware. Files with this hash have been observed executing remote code, encrypting files, and establishing persistence.',
+                'severity': 9.2,
+                'published_date': datetime.datetime.now() - datetime.timedelta(days=7),
+                'updated_date': datetime.datetime.now()
+            } for i, (file_hash, malware_name) in enumerate([
+                ('a67c96bdf99ffa78331e0a7bf6c4081a1893465d', 'Emotet'),
+                ('d8bbd7c5c29ab8925fa9cfd8c622ca804ac8826d', 'TrickBot'),
+                ('e32856633c5e7a804eb68f5919d41a6b8cf2386c', 'Ryuk Ransomware'),
+                ('f4d16c42739c1978a76a26091c8092e33d5ba8a2', 'Conti Ransomware')
+            ])
+        ])
+        
+        # Add synthetic threat actors
+        synthetic_data.extend([
+            {
+                'source': 'MITRE-GROUP',
+                'reference_id': f'G{i}',
+                'title': name,
+                'description': description,
+                'severity': severity,
+                'published_date': datetime.datetime.now() - datetime.timedelta(days=180),
+                'updated_date': datetime.datetime.now() - datetime.timedelta(days=i)
+            } for i, (name, description, severity) in enumerate([
+                ('APT29', 'Sophisticated threat actor associated with Russian intelligence services. Known for targeted operations against government, diplomatic, and research entities.', 9.0),
+                ('Lazarus Group', 'Threat actor associated with North Korea. Known for financially motivated attacks, cryptocurrency theft, and espionage operations.', 8.7),
+                ('Kimsuky', 'Threat actor focused on intelligence gathering on foreign policy and national security issues. Primarily targets government entities.', 7.5),
+                ('Mustang Panda', 'Threat actor that targets organizations across multiple sectors with a focus on intelligence gathering. Known for using themed lures.', 7.8)
+            ])
+        ])
+        
         # Combine all threat data
-        all_threats = cve_data + mitre_data
+        all_threats = cve_data + mitre_data + synthetic_data
         
         # Generate embeddings for all threat descriptions
         descriptions = [
@@ -386,3 +469,182 @@ class ThreatAnalyzer:
             "updated": len(all_threats),
             "sources": list(set(t['source'] for t in all_threats))
         }
+    
+    def _extract_iocs(self, parsed_log: Dict) -> List[Dict]:
+        """Extract potential indicators of compromise from parsed log
+        
+        Args:
+            parsed_log: The parsed log data
+            
+        Returns:
+            List of potential IOCs with type and value
+        """
+        iocs = []
+        
+        # Extract IP addresses
+        for field in ["source_ip", "destination_ip", "ip_address", "remote_address"]:
+            if field in parsed_log and parsed_log[field]:
+                ip = parsed_log[field]
+                
+                # Verify this is a valid IP and not a private/internal one
+                try:
+                    ip_obj = ipaddress.ip_address(ip)
+                    if not ip_obj.is_private and not ip_obj.is_loopback and not ip_obj.is_link_local:
+                        iocs.append({
+                            "type": "ip",
+                            "value": ip,
+                            "source_field": field,
+                            "reputation": "Unknown"  # Will be enriched later
+                        })
+                except ValueError:
+                    # Not a valid IP address
+                    pass
+        
+        # Extract domains/hostnames
+        for field in ["hostname", "domain", "target", "url", "host"]:
+            if field in parsed_log and parsed_log[field]:
+                value = parsed_log[field]
+                
+                # Simple validation to avoid internal hostnames
+                if "." in value and not value.startswith("127.0.0.1") and not value.startswith("localhost"):
+                    iocs.append({
+                        "type": "domain",
+                        "value": value,
+                        "source_field": field,
+                        "reputation": "Unknown"
+                    })
+        
+        # Extract file hashes if present
+        for field in ["md5", "sha1", "sha256", "hash", "file_hash"]:
+            if field in parsed_log and parsed_log[field]:
+                iocs.append({
+                    "type": "hash",
+                    "value": parsed_log[field],
+                    "hash_type": field.split("_")[-1],
+                    "source_field": field,
+                    "reputation": "Unknown"
+                })
+        
+        return iocs
+    
+    def _find_related_iocs(self, extracted_iocs: List[Dict]) -> Dict:
+        """Find related IOCs in threat intelligence database
+        
+        Args:
+            extracted_iocs: List of extracted IOCs from log
+            
+        Returns:
+            Dictionary of related threat intelligence
+        """
+        related = {
+            "matches": [],
+            "possible_matches": []
+        }
+        
+        for ioc in extracted_iocs:
+            # Look for exact matches in threat intelligence
+            if ioc["type"] == "ip":
+                # Look for this IP in our IOC-IP entries
+                threat = self.db.query(ThreatIntelligence).filter(
+                    ThreatIntelligence.source == "IOC-IP",
+                    ThreatIntelligence.title.like(f"%{ioc['value']}%")
+                ).first()
+                
+                if threat:
+                    related["matches"].append({
+                        "ioc": ioc,
+                        "threat": {
+                            "id": threat.id,
+                            "title": threat.title,
+                            "description": threat.description,
+                            "severity": threat.severity,
+                            "source": threat.source
+                        },
+                        "confidence": 100  # Exact match
+                    })
+            
+            elif ioc["type"] == "domain":
+                # Look for this domain in our IOC-DOMAIN entries
+                threat = self.db.query(ThreatIntelligence).filter(
+                    ThreatIntelligence.source == "IOC-DOMAIN",
+                    ThreatIntelligence.title.like(f"%{ioc['value']}%")
+                ).first()
+                
+                if threat:
+                    related["matches"].append({
+                        "ioc": ioc,
+                        "threat": {
+                            "id": threat.id,
+                            "title": threat.title,
+                            "description": threat.description,
+                            "severity": threat.severity,
+                            "source": threat.source
+                        },
+                        "confidence": 100  # Exact match
+                    })
+            
+            elif ioc["type"] == "hash":
+                # Look for this hash in our IOC-HASH entries
+                threat = self.db.query(ThreatIntelligence).filter(
+                    ThreatIntelligence.source == "IOC-HASH",
+                    ThreatIntelligence.title.like(f"%{ioc['value'][:12]}%")
+                ).first()
+                
+                if threat:
+                    related["matches"].append({
+                        "ioc": ioc,
+                        "threat": {
+                            "id": threat.id,
+                            "title": threat.title,
+                            "description": threat.description,
+                            "severity": threat.severity,
+                            "source": threat.source
+                        },
+                        "confidence": 100  # Exact match
+                    })
+        
+        # If we have no exact matches, try semantic search
+        if not related["matches"] and extracted_iocs:
+            # Create a query from the IOCs
+            query = " ".join([f"{ioc['type']} {ioc['value']}" for ioc in extracted_iocs])
+            
+            # Get embedding for the query
+            query_embedding = self.embeddings.get_embedding(query)
+            
+            # Find similar threats
+            sql = text("""
+                SELECT id, 1 - (embedding <=> :query_embedding) as similarity
+                FROM threat_intelligence
+                WHERE similarity > 0.7
+                ORDER BY similarity DESC
+                LIMIT 5
+            """)
+            
+            result = self.db.execute(sql, {
+                "query_embedding": query_embedding
+            })
+            
+            # Get threat IDs and similarities
+            threat_matches = [(row[0], row[1]) for row in result]
+            
+            # Fetch full threat objects
+            for threat_id, similarity in threat_matches:
+                threat = self.db.query(ThreatIntelligence).filter_by(id=threat_id).first()
+                if threat:
+                    related["possible_matches"].append({
+                        "threat": {
+                            "id": threat.id,
+                            "title": threat.title,
+                            "description": threat.description,
+                            "severity": threat.severity,
+                            "source": threat.source
+                        },
+                        "confidence": round(similarity * 100, 1)
+                    })
+        
+        return related
+    
+    def _generate_incident_description(self, parsed_log: Dict) -> str:
+        # Implement the logic to generate a description based on the parsed log
+        # This is a placeholder and should be replaced with the actual implementation
+        return f"Potential security incident from {parsed_log.get('source_ip', 'unknown')}"

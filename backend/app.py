@@ -5,10 +5,10 @@ import os
 import sys
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
-from sqlalchemy import func  # Add this import at the top
+from sqlalchemy import func, text
 
 # Fix import path issue
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -84,6 +84,9 @@ async def analyze_log(request: Request, db: Session = Depends(get_db)):
 async def get_incidents(limit: int = 10, offset: int = 0, resolved: Optional[str] = None, db: Session = Depends(get_db)):
     """Get list of security incidents"""
     try:
+        # Add debug output
+        print(f"Fetching incidents: limit={limit}, offset={offset}, resolved={resolved}")
+        
         # Build query
         query = db.query(SecurityIncident)
         
@@ -94,9 +97,13 @@ async def get_incidents(limit: int = 10, offset: int = 0, resolved: Optional[str
         # Order by most recent first
         query = query.order_by(SecurityIncident.timestamp.desc())
         
-        # Paginate
+        # Debug output
         total = query.count()
+        print(f"Total incidents found in database: {total}")
+        
+        # Paginate
         incidents = query.limit(limit).offset(offset).all()
+        print(f"Returning {len(incidents)} incidents after pagination")
         
         # Format results
         result = {
@@ -134,6 +141,10 @@ async def get_incidents(limit: int = 10, offset: int = 0, resolved: Optional[str
             
             result["incidents"].append(incident_data)
         
+        # Print first incident for debugging
+        if len(result["incidents"]) > 0:
+            print(f"Sample first incident: {json.dumps(result['incidents'][0], indent=2)}")
+            
         return result
     except Exception as e:
         logger.error(f"Error fetching incidents: {e}")
@@ -269,6 +280,253 @@ async def get_threat_intelligence_status(db: Session = Depends(get_db)):
         }
     except Exception as e:
         logger.error(f"Error getting threat intelligence status: {e}")
+
+@app.get("/api/threat-intelligence")
+async def get_threat_intelligence(
+    limit: int = 50, 
+    offset: int = 0, 
+    source: Optional[str] = None,
+    min_severity: Optional[float] = None,
+    query: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get threat intelligence data with optional filtering"""
+    try:
+        # Start with base query
+        base_query = db.query(ThreatIntelligence)
+        
+        # Apply filters if provided
+        if source:
+            base_query = base_query.filter(ThreatIntelligence.source == source)
+        
+        if min_severity is not None:
+            base_query = base_query.filter(ThreatIntelligence.severity >= min_severity)
+            
+        # Get total count for pagination
+        total_count = base_query.count()
+        
+        # Apply semantic search if query is provided
+        if query:
+            # Create analyzer for embeddings
+            analyzer = ThreatAnalyzer(db_session=db)
+            
+            # Get embedding for query
+            query_embedding = analyzer.embeddings.get_embedding(query)
+            
+            # Find similar threats using vector search
+            # First, order by cosine similarity between query embedding and threat embeddings
+            sql = text("""
+                SELECT id, 1 - (embedding <=> :query_embedding) as similarity
+                FROM threat_intelligence
+                ORDER BY similarity DESC
+                LIMIT :limit OFFSET :offset
+            """)
+            
+            result = db.execute(sql, {
+                "query_embedding": query_embedding,
+                "limit": limit,
+                "offset": offset
+            })
+            
+            # Get threat IDs and order them by similarity
+            threat_ids = [row[0] for row in result]
+            
+            # Fetch full threat objects
+            threats = []
+            if threat_ids:
+                # Use SQL's ARRAY_POSITION to preserve the order from the vector search
+                ordered_threats = db.query(ThreatIntelligence).filter(
+                    ThreatIntelligence.id.in_(threat_ids)
+                ).all()
+                
+                # Re-order based on threat_ids
+                id_to_threat = {threat.id: threat for threat in ordered_threats}
+                threats = [id_to_threat[id] for id in threat_ids if id in id_to_threat]
+            
+        else:
+            # If no query provided, just paginate
+            threats = base_query.order_by(ThreatIntelligence.updated_date.desc())\
+                .limit(limit).offset(offset).all()
+        
+        # Format results
+        result = {
+            "total": total_count,
+            "items": [],
+            # Group by source for easier frontend display
+            "by_source": {}
+        }
+        
+        # Prepare IOCs, campaigns, and threat actors collections
+        iocs = []
+        campaigns = []
+        threat_actors = []
+        vulnerabilities = []
+        
+        # Process each threat
+        for threat in threats:
+            # Basic threat info dictionary
+            threat_info = {
+                "id": threat.id,
+                "source": threat.source,
+                "reference_id": threat.reference_id,
+                "title": threat.title,
+                "description": threat.description,
+                "severity": threat.severity,
+                "published_date": threat.published_date.isoformat() if threat.published_date else None,
+                "updated_date": threat.updated_date.isoformat() if threat.updated_date else None,
+            }
+            
+            # Add to appropriate collection based on source
+            if threat.source == "CVE":
+                vulnerabilities.append(threat_info)
+            elif threat.source == "MITRE-TECHNIQUE":
+                # Add to IOCs with appropriate type
+                if "T1566" in threat.reference_id:  # Phishing
+                    iocs.append({
+                        **threat_info,
+                        "type": "Phishing Indicator",
+                        "confidence": 90,
+                        "first_seen": threat.published_date.isoformat() if threat.published_date else None,
+                        "last_seen": threat.updated_date.isoformat() if threat.updated_date else None,
+                        "value": threat.title,
+                        "tags": ["phishing", "social-engineering"]
+                    })
+                else:
+                    # Add to threat actors for other MITRE techniques
+                    threat_actors.append({
+                        **threat_info,
+                        "type": "APT",
+                        "threat_level": "High" if threat.severity > 7 else "Medium" if threat.severity > 4 else "Low",
+                        "origin": "Unknown",
+                        "active_since": threat.published_date.strftime("%Y-%m") if threat.published_date else "Unknown",
+                        "associated_campaigns": [],
+                        "ttps": [threat.reference_id]
+                    })
+            elif threat.source == "MITRE-GROUP":
+                # Add to threat actors
+                threat_actors.append({
+                    **threat_info,
+                    "type": "APT",
+                    "threat_level": "High" if threat.severity > 7 else "Medium" if threat.severity > 4 else "Low",
+                    "origin": "Unknown",
+                    "active_since": threat.published_date.strftime("%Y-%m") if threat.published_date else "Unknown",
+                    "associated_campaigns": [],
+                    "ttps": []
+                })
+            else:
+                # Add to generic list
+                result["items"].append(threat_info)
+                
+            # Add to source grouping
+            if threat.source not in result["by_source"]:
+                result["by_source"][threat.source] = []
+            result["by_source"][threat.source].append(threat_info)
+        
+        # Create mock campaigns combining multiple threats
+        if threat_actors and vulnerabilities:
+            campaigns.append({
+                "id": 1,
+                "name": "Operation Systematic Surge",
+                "description": "A sophisticated campaign targeting multiple vulnerabilities in web applications to gain unauthorized access to sensitive information.",
+                "threat_level": "High",
+                "status": "Active",
+                "first_seen": datetime.datetime.now().replace(month=datetime.datetime.now().month-3).isoformat(),
+                "last_activity": datetime.datetime.now().isoformat(),
+                "target_sectors": ["Finance", "Healthcare", "Government"],
+                "associated_actors": [actor["id"] for actor in threat_actors[:2]],
+                "related_iocs": [ioc["id"] for ioc in iocs[:5]] if iocs else []
+            })
+            
+            campaigns.append({
+                "id": 2,
+                "name": "BlueLight Infiltration",
+                "description": "A targeted campaign using spear-phishing techniques to deliver malware that exploits known vulnerabilities.",
+                "threat_level": "Medium",
+                "status": "Monitoring", 
+                "first_seen": datetime.datetime.now().replace(month=datetime.datetime.now().month-6).isoformat(),
+                "last_activity": datetime.datetime.now().replace(day=datetime.datetime.now().day-14).isoformat(),
+                "target_sectors": ["Energy", "Manufacturing"],
+                "associated_actors": [actor["id"] for actor in threat_actors[2:4]] if len(threat_actors) > 3 else [],
+                "related_iocs": [ioc["id"] for ioc in iocs[5:10]] if len(iocs) > 5 else []
+            })
+        
+        # Add the collections to the result
+        result["iocs"] = iocs
+        result["campaigns"] = campaigns
+        result["threat_actors"] = threat_actors
+        result["vulnerabilities"] = vulnerabilities
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error retrieving threat intelligence: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/threat-intelligence/search")
+async def search_threat_intelligence(
+    query: str,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """Search for threat intelligence data"""
+    try:
+        # Create analyzer for embeddings
+        analyzer = ThreatAnalyzer(db_session=db)
+        
+        # Get embedding for query
+        query_embedding = analyzer.embeddings.get_embedding(query)
+        
+        # Find similar threats using vector search
+        # First, order by cosine similarity between query embedding and threat embeddings
+        sql = text("""
+            SELECT id, 1 - (embedding <=> :query_embedding) as similarity
+            FROM threat_intelligence
+            ORDER BY similarity DESC
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        result = db.execute(sql, {
+            "query_embedding": query_embedding,
+            "limit": limit,
+            "offset": offset
+        })
+        
+        # Get threat IDs and order them by similarity
+        threat_ids = [row[0] for row in result]
+        
+        # Fetch full threat objects
+        threats = []
+        if threat_ids:
+            # Use SQL's ARRAY_POSITION to preserve the order from the vector search
+            ordered_threats = db.query(ThreatIntelligence).filter(
+                ThreatIntelligence.id.in_(threat_ids)
+            ).all()
+            
+            # Re-order based on threat_ids
+            id_to_threat = {threat.id: threat for threat in ordered_threats}
+            threats = [id_to_threat[id] for id in threat_ids if id in id_to_threat]
+        
+        # Format results
+        result = {
+            "total": len(threats),
+            "items": [
+                {
+                    "id": threat.id,
+                    "source": threat.source,
+                    "reference_id": threat.reference_id,
+                    "title": threat.title,
+                    "description": threat.description,
+                    "severity": threat.severity,
+                    "published_date": threat.published_date.isoformat() if threat.published_date else None,
+                    "updated_date": threat.updated_date.isoformat() if threat.updated_date else None,
+                } for threat in threats
+            ]
+        }
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error searching threat intelligence: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # FastAPI routes for more complex operations
@@ -298,53 +556,109 @@ async def analyze_logs_batch(
 
 @app.get("/api/statistics")
 async def get_statistics(db: Session = Depends(get_db)):
-    """Get system statistics"""
+    """Get system statistics for dashboard"""
     try:
-        # Get incident counts
-        total_incidents = db.query(SecurityIncident).count()
-        resolved_incidents = db.query(SecurityIncident).filter(
-            SecurityIncident.is_resolved == True
-        ).count()
+        # Get incident statistics
+        incidents_total = db.query(func.count(SecurityIncident.id)).scalar()
+        incidents_unresolved = db.query(func.count(SecurityIncident.id))\
+            .filter(SecurityIncident.is_resolved == False).scalar()
+        incidents_resolved = db.query(func.count(SecurityIncident.id))\
+            .filter(SecurityIncident.is_resolved == True).scalar()
         
-        # Get severity distribution
-        severity_ranges = [
-            (0.0, 0.2, "Low"),
-            (0.2, 0.5, "Medium-Low"),
-            (0.5, 0.7, "Medium"),
-            (0.7, 0.9, "Medium-High"),
-            (0.9, 1.0, "High")
-        ]
+        # Get average severity of incidents
+        avg_severity = db.query(func.avg(SecurityIncident.severity)).scalar()
         
-        severity_distribution = {}
-        for min_val, max_val, label in severity_ranges:
-            count = db.query(SecurityIncident).filter(
-                SecurityIncident.severity >= min_val,
-                SecurityIncident.severity < max_val
-            ).count()
-            severity_distribution[label] = count
+        # Get count by severity level
+        high_severity = db.query(func.count(SecurityIncident.id))\
+            .filter(SecurityIncident.severity >= 7).scalar()
+        medium_severity = db.query(func.count(SecurityIncident.id))\
+            .filter(SecurityIncident.severity >= 4, SecurityIncident.severity < 7).scalar()
+        low_severity = db.query(func.count(SecurityIncident.id))\
+            .filter(SecurityIncident.severity < 4).scalar()
         
-        # Get threat intelligence counts
-        threat_count = db.query(ThreatIntelligence).count()
-        threat_sources = db.query(ThreatIntelligence.source, 
-                                  func.count(ThreatIntelligence.id)  # Use imported func here
-                                 ).group_by(ThreatIntelligence.source).all()
+        # Get recent incidents (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_incidents = db.query(func.count(SecurityIncident.id))\
+            .filter(SecurityIncident.timestamp >= seven_days_ago).scalar()
         
-        threat_distribution = {source: count for source, count in threat_sources}
+        # Get threat intelligence statistics
+        total_threats = db.query(func.count(ThreatIntelligence.id)).scalar()
         
+        # Get threat counts by source
+        threat_sources = db.query(
+            ThreatIntelligence.source, 
+            func.count(ThreatIntelligence.id)
+        ).group_by(ThreatIntelligence.source).all()
+        
+        # Get threat counts by severity
+        critical_threats = db.query(func.count(ThreatIntelligence.id))\
+            .filter(ThreatIntelligence.severity >= 9).scalar()
+        high_threats = db.query(func.count(ThreatIntelligence.id))\
+            .filter(ThreatIntelligence.severity >= 7, ThreatIntelligence.severity < 9).scalar()
+        medium_threats = db.query(func.count(ThreatIntelligence.id))\
+            .filter(ThreatIntelligence.severity >= 4, ThreatIntelligence.severity < 7).scalar()
+        low_threats = db.query(func.count(ThreatIntelligence.id))\
+            .filter(ThreatIntelligence.severity < 4).scalar()
+        
+        # Get recent threats (last 30 days)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        recent_threats = db.query(func.count(ThreatIntelligence.id))\
+            .filter(ThreatIntelligence.updated_date >= thirty_days_ago).scalar()
+            
+        # Get recommendations statistics
+        total_recommendations = db.query(func.count(RecommendedAction.id)).scalar()
+        implemented_recommendations = db.query(func.count(RecommendedAction.id))\
+            .filter(RecommendedAction.is_implemented == True).scalar()
+        
+        # Format the result
         return {
             "incidents": {
-                "total": total_incidents,
-                "resolved": resolved_incidents,
-                "unresolved": total_incidents - resolved_incidents,
-                "severity_distribution": severity_distribution
+                "total": incidents_total,
+                "unresolved": incidents_unresolved,
+                "resolved": incidents_resolved,
+                "recent": recent_incidents,
+                "avg_severity": float(avg_severity) if avg_severity else 0,
+                "by_severity": {
+                    "high": high_severity,
+                    "medium": medium_severity,
+                    "low": low_severity
+                }
             },
             "threat_intelligence": {
-                "total": threat_count,
-                "source_distribution": threat_distribution
+                "total": total_threats,
+                "recent": recent_threats,
+                "by_severity": {
+                    "critical": critical_threats,
+                    "high": high_threats,
+                    "medium": medium_threats,
+                    "low": low_threats
+                },
+                "by_source": {
+                    source: count for source, count in threat_sources
+                },
+                "ioc_counts": {
+                    "ip": db.query(func.count(ThreatIntelligence.id))
+                        .filter(ThreatIntelligence.source == "IOC-IP").scalar() or 0,
+                    "domain": db.query(func.count(ThreatIntelligence.id))
+                        .filter(ThreatIntelligence.source == "IOC-DOMAIN").scalar() or 0,
+                    "hash": db.query(func.count(ThreatIntelligence.id))
+                        .filter(ThreatIntelligence.source == "IOC-HASH").scalar() or 0,
+                    "url": db.query(func.count(ThreatIntelligence.id))
+                        .filter(ThreatIntelligence.source == "IOC-URL").scalar() or 0
+                }
+            },
+            "recommendations": {
+                "total": total_recommendations,
+                "implemented": implemented_recommendations,
+                "pending": total_recommendations - implemented_recommendations,
+                "implementation_rate": (
+                    float(implemented_recommendations) / total_recommendations
+                    if total_recommendations > 0 else 0
+                )
             }
         }
     except Exception as e:
-        logger.error(f"Error fetching statistics: {e}")
+        logger.error(f"Error getting statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/system/status")
@@ -353,9 +667,9 @@ async def get_system_status(db: Session = Depends(get_db)):
     try:
         # Check database connection
         try:
-            # Execute a simple query to check DB connection
-            db.execute(text("SELECT 1")).fetchone()
-            db_status = "connected"
+            # Execute a simple query to check DB connection - use text() function
+            result = db.execute(text("SELECT 1")).scalar()
+            db_status = "connected" if result == 1 else "disconnected"
         except Exception as e:
             logger.error(f"Database connection error: {e}")
             db_status = "disconnected"

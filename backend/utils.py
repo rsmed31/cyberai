@@ -169,38 +169,57 @@ class VectorEmbeddings:
                 task_type="retrieval_document"
             )
             # Extract the embedding vector
-            return result["embedding"]
+            embedding = result["embedding"]
         else:
             # Use local model
             result = self.model([text])
-            return result[0].numpy().tolist()
+            embedding = result[0].numpy().tolist()
+        
+        # Ensure the embedding is 768 dimensions (not 1536)
+        if len(embedding) > 768:
+            # Truncate to 768
+            embedding = embedding[:768]
+        elif len(embedding) < 768:
+            # Pad to 768
+            padding = [0.0] * (768 - len(embedding))
+            embedding = embedding + padding
+        
+        return embedding
     
     def get_batch_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings for multiple texts
-        
-        Args:
-            texts: List of texts to generate embeddings for
-            
-        Returns:
-            List of embeddings
-        """
+        """Generate embeddings for multiple texts"""
         if self.use_google:
             # Process each text individually
             embeddings = []
             for text in texts:
                 result = genai.embed_content(
-                    model="models/embedding-001",  # Add the 'models/' prefix
+                    model="models/embedding-001",
                     content=text,
                     task_type="retrieval_document"
                 )
-                embeddings.append(result["embedding"])
+                embedding = result["embedding"]
+                # Ensure the embedding is 768 dimensions (not 1536)
+                if len(embedding) > 768:
+                    # Truncate to 768
+                    embedding = embedding[:768]
+                elif len(embedding) < 768:
+                    # Pad to 768
+                    padding = [0.0] * (768 - len(embedding))
+                    embedding = embedding + padding
+                embeddings.append(embedding)
             return embeddings
         else:
             # Use local model in batch mode
             results = []
             for text in texts:
                 result = self.model([text])
-                results.append(result[0].numpy().tolist())
+                embedding = result[0].numpy().tolist()
+                # Ensure the embedding is 1536 dimensions
+                if len(embedding) < 1536:
+                    # Pad embedding to 1536 dimensions
+                    padding = [0.0] * (1536 - len(embedding))
+                    embedding = embedding + padding
+                results.append(embedding)
             return results
 
 class ThreatIntelligenceFetcher:

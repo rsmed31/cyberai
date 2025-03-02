@@ -11,7 +11,8 @@
                     <h5 class="mb-0">Batch Log Analysis</h5>
                 </div>
                 <div class="card-body">
-                    {% if not batch_results or batch_results|length == 0 %}
+                    {% if not batch_results %}
+                    <!-- Form for submitting logs -->
                     <form method="POST" enctype="multipart/form-data">
                         <div class="form-group mb-3">
                             <label for="source_type">Log Source Type</label>
@@ -40,6 +41,7 @@
                         </button>
                     </form>
                     {% else %}
+                    <!-- Display batch analysis results -->
                     <div class="mb-4">
                         <h5>Analysis Results</h5>
                         <a href="{{ url_for('batch_analyzer') }}" class="btn btn-sm btn-secondary mb-3">
@@ -47,35 +49,47 @@
                         </a>
                     </div>
                     
-                    {% if batch_results.results|default([])|length > 0 %}
+                    {% if batch_results and batch_results.results %}
                     <div class="results-container">
                         {% for result in batch_results.results %}
                         <div class="card mb-4">
                             <div class="card-header bg-light">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <h6 class="mb-0">Log #{{ loop.index }}</h6>
-                                    <span class="badge bg-{{ 'danger' if result.severity >= 0.7 else 'warning' if result.severity >= 0.4 else 'info' }}">
-                                        Severity: {{ (result.severity * 10)|int }}/10
+                                    {% if result.severity is defined %}
+                                    <span class="badge bg-{{ 'danger' if result.severity is defined and result.severity >= 0.7 else 'warning' if result.severity is defined and result.severity >= 0.4 else 'info' }}">
+                                        Severity: {{ ((result.severity|default(0)) * 10)|int }}/10
                                     </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">
+                                        Severity: Unknown
+                                    </span>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="card-body">
                                 <h6>Original Log</h6>
-                                <pre class="bg-light p-3 rounded">{{ result.parsed_log.raw_log }}</pre>
+                                <pre class="bg-light p-3 rounded">{{ result.parsed_log.raw_log if result.parsed_log and result.parsed_log.raw_log else "Log data unavailable" }}</pre>
                                 
                                 <h6 class="mt-3">Parsed Information</h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-striped">
-                                        <tbody>
-                                            {% for key, value in result.parsed_log.items() if key != 'raw_log' %}
-                                            <tr>
-                                                <th style="width: 200px">{{ key|replace('_', ' ')|title }}</th>
-                                                <td>{{ value }}</td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                {% if result.parsed_log and result.parsed_log|length > 1 %}
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped">
+                                            <tbody>
+                                                {% for key, value in result.parsed_log.items() if key != 'raw_log' %}
+                                                <tr>
+                                                    <th style="width: 200px">{{ key|replace('_', ' ')|title }}</th>
+                                                    <td>{{ value }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-warning">
+                                        Unable to parse log information. The log format may not be recognized.
+                                    </div>
+                                {% endif %}
                                 
                                 {% if result.related_threats|default([])|length > 0 %}
                                 <h6 class="mt-3">Related Threats</h6>
@@ -84,7 +98,7 @@
                                     <li class="list-group-item">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <span>{{ threat.title }}</span>
-                                            <span class="badge bg-{{ severity_class(threat.severity) }}">{{ threat.source }}</span>
+                                            <span class="badge bg-secondary">{{ threat.source }}</span>
                                         </div>
                                         <small class="text-muted">{{ threat.description|truncate(100) }}</small>
                                     </li>
@@ -92,14 +106,16 @@
                                 </ul>
                                 {% endif %}
                                 
-                                {% if result.recommendations|default([])|length > 0 %}
+                                {% if result.recommendations is defined and result.recommendations|length > 0 %}
                                 <h6 class="mt-3">Recommendations</h6>
                                 <ul class="list-group">
                                     {% for rec in result.recommendations %}
                                     <li class="list-group-item">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                             <strong>{{ rec.action_type|replace('_', ' ')|title }}</strong>
-                                            <span class="badge bg-{{ 'danger' if rec.priority == 1 else 'warning' if rec.priority == 2 else 'info' }}">Priority {{ rec.priority }}</span>
+                                            <span class="badge bg-{{ 'danger' if rec.priority == 1 else 'warning' if rec.priority == 2 else 'info' }}">
+                                                Priority {{ rec.priority }}
+                                            </span>
                                         </div>
                                         <p class="mb-0">{{ rec.description }}</p>
                                     </li>
@@ -120,7 +136,7 @@
                     </div>
                     {% else %}
                     <div class="alert alert-info">
-                        No analysis results were returned. The logs may not contain any security incidents or the analysis was unable to process the logs.
+                        No analysis results were returned.
                     </div>
                     {% endif %}
                     {% endif %}

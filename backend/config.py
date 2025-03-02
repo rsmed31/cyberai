@@ -20,7 +20,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")  # Add Google API key
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 
 # Vector database settings
-VECTOR_DIMENSION = 1536  # Default for OpenAI embeddings
+VECTOR_DIMENSION = 768  # Default for OpenAI embeddings
 
 # Paths for log files and sample data
 LOG_DIRECTORY = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
